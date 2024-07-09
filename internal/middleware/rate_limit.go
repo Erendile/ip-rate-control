@@ -2,6 +2,8 @@ package middleware
 
 import (
 	"database/sql"
+	"ip-rate-control/pkg/ip"
+	"log"
 	"net/http"
 	"time"
 
@@ -13,7 +15,8 @@ const maxRequestsPerHour = 10
 func RateLimitMiddleware(db *sql.DB) mux.MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ipAddress := r.RemoteAddr
+			ipAddress := ip.GetClientIP(r)
+			log.Println(ipAddress)
 			now := time.Now()
 
 			var requestCount int
