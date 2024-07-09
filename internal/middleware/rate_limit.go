@@ -17,7 +17,8 @@ func RateLimitMiddleware(db *sql.DB) mux.MiddlewareFunc {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ipAddress := ip.GetClientIP(r)
 			log.Println(ipAddress)
-			now := time.Now()
+			now := time.Now().In(time.Local)
+			log.Println("Current Time (Local):", now)
 
 			var requestCount int
 			var lastRequest time.Time
@@ -36,7 +37,10 @@ func RateLimitMiddleware(db *sql.DB) mux.MiddlewareFunc {
 					return
 				}
 			} else {
-				if now.Sub(lastRequest).Hours() < 1 {
+				log.Println("Last Request (Local):", lastRequest)
+				duration := now.Sub(lastRequest)
+				log.Println("Duration since last request (hours):", duration.Hours())
+				if duration.Hours() < 1 {
 					if requestCount >= maxRequestsPerHour {
 						http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
 						return
