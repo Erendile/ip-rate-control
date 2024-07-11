@@ -5,6 +5,7 @@ import (
 	"ip-rate-control/internal/database"
 	"ip-rate-control/internal/handler"
 	"ip-rate-control/internal/middleware"
+	"ip-rate-control/internal/redis"
 	"ip-rate-control/pkg/config"
 	"log"
 	"net/http"
@@ -17,8 +18,10 @@ func main() {
 		log.Fatalf("Error initializing database: %v", err)
 	}
 
+	redisClient := redis.InitializeRedis(cfg.Redis)
+
 	router := mux.NewRouter()
-	router.Use(middleware.RateLimitMiddleware(db))
+	router.Use(middleware.RateLimitMiddleware(redisClient, db))
 	router.HandleFunc("/", handler.RootHandler).Methods("GET")
 
 	log.Printf("Server is running on port %s", cfg.Server.Port)

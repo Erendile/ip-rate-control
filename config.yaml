@@ -7,3 +7,5 @@ local:
     user: "erendile"
     password: "5326970"
     name: "ip-rate"
+  redis:
+    addr: "localhost:6379"

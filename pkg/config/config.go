@@ -12,6 +12,7 @@ type Config struct {
 type ApplicationConfig struct {
 	Server   ServerConfig   `yaml:"server"`
 	Database DatabaseConfig `yaml:"database"`
+	Redis    RedisConfig    `yaml:"redis"`
 }
 
 type ServerConfig struct {
@@ -24,6 +25,10 @@ type DatabaseConfig struct {
 	User     string `yaml:"user"`
 	Password string `yaml:"password"`
 	Name     string `yaml:"name"`
+}
+
+type RedisConfig struct {
+	Addr string `yaml:"addr"`
 }
 
 func NewConfiguration() *Config {

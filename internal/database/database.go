@@ -35,8 +35,7 @@ func createTableIfNotExists(db *sql.DB) error {
 	query := `
 	CREATE TABLE IF NOT EXISTS ip_requests (
 		ip_address VARCHAR(45) PRIMARY KEY,
-		request_count INT NOT NULL,
-		last_request TIMESTAMPTZ NOT NULL
+		first_request TIMESTAMPTZ NOT NULL
 	);
 	`
 
