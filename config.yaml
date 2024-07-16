@@ -1,9 +1,3 @@
 local:
   server:
     port: "8080"
-  database:
-    host: "localhost"
-    port: 5432
-    user: "erendile"
-    password: "5326970"
-    name: "ip-rate"

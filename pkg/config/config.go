@@ -10,20 +10,11 @@ type Config struct {
 }
 
 type ApplicationConfig struct {
-	Server   ServerConfig   `yaml:"server"`
-	Database DatabaseConfig `yaml:"database"`
+	Server ServerConfig `yaml:"server"`
 }
 
 type ServerConfig struct {
 	Port string `yaml:"port"`
-}
-
-type DatabaseConfig struct {
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	User     string `yaml:"user"`
-	Password string `yaml:"password"`
-	Name     string `yaml:"name"`
 }
 
 func NewConfiguration() *Config {

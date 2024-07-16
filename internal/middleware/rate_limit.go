@@ -1,66 +1,101 @@
 package middleware
 
 import (
-	"database/sql"
 	"ip-rate-control/pkg/ip"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gorilla/mux"
 )
 
-const maxRequestsPerHour = 10
+const (
+	maxRequestsPerHour = 10
+	ttlDuration        = time.Hour
+	//ttlDuration = 2 * time.Minute
+)
 
-func RateLimitMiddleware(db *sql.DB) mux.MiddlewareFunc {
+var (
+	ipRequests      = make(map[string]int)
+	queue           []queueItem
+	mutex           sync.Mutex
+	cleanupInterval time.Duration
+)
+
+type queueItem struct {
+	ip           string
+	timeToRemove time.Time
+}
+
+func cleanupQueue() {
+	for {
+		mutex.Lock()
+		now := time.Now()
+
+		for len(queue) > 0 && queue[0].timeToRemove.Before(now) {
+			ip := queue[0].ip
+			delete(ipRequests, ip)
+			log.Printf("CleanupQueue: Removed IP: %s\n", ip)
+			queue = queue[1:]
+		}
+
+		if len(queue) > 0 {
+			cleanupInterval = queue[0].timeToRemove.Sub(now)
+			if cleanupInterval < 0 {
+				cleanupInterval = 0
+			}
+			log.Printf("CleanupQueue: Waiting for %v\n", cleanupInterval)
+		} else {
+			cleanupInterval = time.Minute
+			log.Println("CleanupQueue: Queue is empty. Waiting for 1 minute.")
+		}
+		mutex.Unlock()
+
+		time.Sleep(cleanupInterval)
+	}
+}
+
+func init() {
+	go cleanupQueue()
+}
+
+func RateLimitMiddleware() mux.MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ipAddress := ip.GetClientIP(r)
-			log.Println(ipAddress)
-			now := time.Now().In(time.Local)
-			log.Println("Current Time (Local):", now)
+			//ipAddress := getLocalClientIP(r)
 
-			var requestCount int
-			var lastRequest time.Time
+			mutex.Lock()
+			defer mutex.Unlock()
+			count, exists := ipRequests[ipAddress]
+			if !exists {
+				count = 0
+				ipRequests[ipAddress] = count
 
-			err := db.QueryRow("SELECT request_count, last_request FROM ip_requests WHERE ip_address = $1", ipAddress).Scan(&requestCount, &lastRequest)
-			if err != nil {
-				if err == sql.ErrNoRows {
-					_, err = db.Exec("INSERT INTO ip_requests (ip_address, request_count, last_request) VALUES ($1, $2, $3)",
-						ipAddress, 1, now)
-					if err != nil {
-						http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-						return
-					}
-				} else {
-					http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-					return
-				}
-			} else {
-				log.Println("Last Request (Local):", lastRequest)
-				duration := now.Sub(lastRequest)
-				log.Println("Duration since last request (hours):", duration.Hours())
-				if duration.Hours() < 1 {
-					if requestCount >= maxRequestsPerHour {
-						http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
-						return
-					}
-
-					_, err = db.Exec("UPDATE ip_requests SET request_count = request_count + 1, last_request = $1 WHERE ip_address = $2", now, ipAddress)
-					if err != nil {
-						http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-						return
-					}
-				} else {
-					_, err = db.Exec("UPDATE ip_requests SET request_count = 1, last_request = $1 WHERE ip_address = $2", now, ipAddress)
-					if err != nil {
-						http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-						return
-					}
-				}
+				timeToRemove := time.Now().Add(ttlDuration)
+				queue = append(queue, queueItem{
+					ip:           ipAddress,
+					timeToRemove: timeToRemove,
+				})
+				log.Printf("RateLimitMiddleware: IP added to queue for rate limiting: %s\n", ipAddress)
 			}
 
+			if count >= maxRequestsPerHour {
+				log.Printf("RateLimitMiddleware: Rate limit exceeded for IP: %s\n", ipAddress)
+				http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
+				return
+			}
+
+			ipRequests[ipAddress]++
 			next.ServeHTTP(w, r)
 		})
 	}
 }
+
+/*
+func getLocalClientIP(r *http.Request) string {
+	queryIP := r.URL.Query().Get("ip")
+	return queryIP
+}
+*/
